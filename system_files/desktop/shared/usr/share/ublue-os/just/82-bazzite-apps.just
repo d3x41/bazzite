@@ -16,7 +16,6 @@ install-lact:
 install-coolercontrol:
     #!/usr/bin/bash
     ublue-update --wait
-    sudo wget https://copr.fedorainfracloud.org/coprs/codifryed/CoolerControl/repo/fedora-$(rpm -E %fedora)/codifryed-CoolerControl-fedora-$(rpm -E %fedora).repo -O /etc/yum.repos.d/_copr_codifryed-CoolerControl.repo
     rpm-ostree install -y liquidctl coolercontrol
     echo 'Complete, please reboot to apply changes.'
 
@@ -125,7 +124,7 @@ install-adwaita-for-steam:
 
 # Install Oversteer for Logitech steering wheels
 install-oversteer: distrobox-check-fedora
-    distrobox enter -n fedora -- bash -c 'sudo dnf copr enable -y kylegospo/oversteer && \
+    distrobox enter -n fedora -- bash -c 'sudo dnf copr enable -y bazzite-org/oversteer && \
       sudo dnf install -y oversteer && \
       distrobox-export --app oversteer'
 
@@ -151,6 +150,12 @@ install-opentabletdriver:
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     echo "Installing OpenTabletDriver..."
+    curl -s https://api.github.com/repos/OpenTabletDriver/OpenTabletDriver/releases/latest \
+    | jq -r '.assets | sort_by(.created_at) | .[] | select (.name|test("opentabletdriver.*tar.gz$")) | .browser_download_url' \
+    | wget -qi - -O /tmp/OpenTabletDriver/opentabletdriver.tar.gz && \
+    tar --strip-components=1 -xvzf /tmp/OpenTabletDriver/opentabletdriver.tar.gz -C /tmp/OpenTabletDriver && \
+    sudo cp /tmp/OpenTabletDriver/etc/udev/rules.d/70-opentabletdriver.rules /etc/udev/rules.d/71-opentabletdriver.rules && \
+    rm -rf /tmp/OpenTabletDriver && \
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && \
     flatpak --system install -y flathub net.opentabletdriver.OpenTabletDriver && \
     mkdir -p $HOME/.config/OpenTabletDriver && \
@@ -158,20 +163,49 @@ install-opentabletdriver:
     mkdir -p $HOME/.config/systemd/user && \
     curl -s https://raw.githubusercontent.com/flathub/net.opentabletdriver.OpenTabletDriver/refs/heads/master/scripts/opentabletdriver.service > $HOME/.config/systemd/user/opentabletdriver.service  && \
     systemctl --user daemon-reload && \
-    systemctl enable --user --now arch-opentabletdriver.service && \
-    distrobox enter -n arch -- bash -c 'distrobox-export --app otd-gui'
+    systemctl enable --user --now opentabletdriver.service
+
+# Remove OpenTabletDriver
+remove-opentabletdriver:
+    #!/usr/bin/bash
+    source /usr/lib/ujust/ujust.sh
+    echo "Uninstalling OpenTabletDriver..."
+    sudo -A rm /etc/udev/rules.d/71-opentabletdriver.rules && \
+    flatpak --system remove -y flathub net.opentabletdriver.OpenTabletDriver && \ 
+    systemctl disable --user --now opentabletdriver.service
 
 # Install Docker, a platform designed to help developers build, share, and run container applications
 install-docker:
     #!/usr/bin/bash
-    sudo mkdir -p /var/lib/docker
-    echo 'Creating Docker group.'
-    sudo groupadd --gid 252 docker
-    echo 'Setting up Docker Distrobox Container.'
-    distrobox assemble create --replace --file /etc/distrobox/docker.ini --name docker
-    echo 'Installing docker-cli for the host.'
+    set -eo pipefail
+    [[ ${DEBUG:-} -eq 1 ]] && set -x
+    [[ $(id -u) -eq 0 ]] && {
+        echo >&2 "Dont run this as root"
+        exit 1
+    }
+    mkdir -p ~/.local/bin
     brew install docker
-    echo 'Complete.'
+    # Handle plugins installation separately to handle file config collision
+    brew install docker-buildx docker-compose || {
+      brew link --overwrite docker-buildx docker-compose
+    }
+
+    [[ -e ~/.local/bin/docker ]] && {
+      gum confirm "There is a file in ~/.local/bin/docker. Do you wish to override it?" || exit 0
+    }
+    ln -sf $(which docker) ~/.local/bin/docker
+    [[ -e /usr/local/bin/docker ]] && {
+      gum confirm "There is a file in /usr/local/bin/docker. Do you wish to override it?" || exit 0
+    }
+    sudo ln -sf $(which docker) /usr/local/bin/docker
+    # Enable podman sockets
+    systemctl --user enable --now podman.socket
+    sudo systemctl enable --now podman.socket
+    # Add podman sockets to docker contexts
+    ctx=$(docker context create podman --docker "host=unix://$(podman system info  --format '{{{{.Host.RemoteSocket.Path}}')") && \
+      docker context use $ctx && unset -v ctx || true
+    ctx=$(sudo docker context create podman-rootful --docker "host=unix://$(sudo podman system info  --format '{{{{.Host.RemoteSocket.Path}}')") && \
+      sudo docker context use $ctx && unset -v ctx || true
 
 # Create fedora distrobox if it doesn't exist
 [private]

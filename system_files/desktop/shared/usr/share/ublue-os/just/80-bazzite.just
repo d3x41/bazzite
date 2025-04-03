@@ -184,6 +184,10 @@ enable-displaylink:
 enable-tailscale:
     systemctl enable --now tailscaled.service
 
+# Enable Framework Fan Control
+enable-framework-fan-control:
+    systemctl enable --now fw-fanctrl.service
+
 # Configure watchdog (default: enabled, recovers the system in the event of a malfunction)
 configure-watchdog ACTION="":
     #!/usr/bin/bash
@@ -329,7 +333,7 @@ bazzite-cli:
     # Brew Bundle Install
     function brew-bundle(){
     echo 'Installing bling from Homebrew 🍻🍻🍻'
-    brew bundle --file /usr/share/ublue-os/homebrew/bazzite-cli.Brewfile --no-lock
+    brew bundle --file /usr/share/ublue-os/homebrew/bazzite-cli.Brewfile
     }
 
     # Check if bling is already sourced
