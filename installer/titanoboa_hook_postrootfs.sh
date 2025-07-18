@@ -384,14 +384,24 @@ dnf -yq remove steam lutris || :
 
 # Warn about limited capabilities of live sessions
 cat >>/etc/skel/.bash_profile <<'EOF'
-yad --timeout=20 \
+yad --timeout=30 \
     --no-escape \
     --no-buttons \
     --on-top \
     --timeout-indicator=bottom \
-    --text="<b>Live ISO sessions have limited capabilities compared to full installations</b>.\nPlease do not use it as a benchmark" \
+    --text-align=center \
+    --title="Welcome" \
+    --text="\nWelcome to the Live ISO for Bazzite\!\n\nThe Live ISO is designed for installation and troubleshooting.\nBecause of this, it is <b>not capable of playing games.</b>\n\nPlease do not use it for benchmarks as it\ndoes not represent the installed experience.\n" \
     || :
 EOF
+
+(
+    wallpaper_url=https://github.com/ublue-os/bazzite/blob/main/press_kit/art/Convergence_Wallpaper_DX.jxl
+    wallpaper_file=/usr/share/wallpapers/${wallpaper_file##*/}
+    wget -nv -O "$wallpaper_file" "$wallpaper_url"
+    rm -f /usr/share/backgrounds/default.xml
+    ln -sf "$wallpaper_file" /usr/share/backgrounds/default.jxl
+)
 
 # Enable on-screen keyboard
 if [[ $imageref == *-deck* ]]; then
